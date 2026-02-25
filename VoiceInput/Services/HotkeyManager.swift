@@ -1,17 +1,37 @@
-import Foundation
+import AppKit
 import HotKey
 
 /// グローバルショートカットキーの管理
-/// Cmd+Shift+V で録音のトグルを行う
+/// AppSettings のショートカット設定に基づいてホットキーを登録する
 final class HotkeyManager {
-    private let hotKey: HotKey
+    private var hotKey: HotKey?
+    private let toggleHandler: () -> Void
 
     /// - Parameter toggleHandler: ショートカット押下時に呼ばれるコールバック
     init(toggleHandler: @escaping () -> Void) {
-        // Cmd+Shift+V をグローバルショートカットとして登録
-        hotKey = HotKey(key: .v, modifiers: [.command, .shift])
-        hotKey.keyDownHandler = {
-            toggleHandler()
+        self.toggleHandler = toggleHandler
+        applyShortcut(AppSettings.shortcut)
+    }
+
+    /// ショートカットを変更する
+    func applyShortcut(_ option: ShortcutOption) {
+        hotKey = nil
+
+        let (key, modifiers) = keyAndModifiers(for: option)
+        hotKey = HotKey(key: key, modifiers: modifiers)
+        hotKey?.keyDownHandler = { [weak self] in
+            self?.toggleHandler()
+        }
+    }
+
+    private func keyAndModifiers(for option: ShortcutOption) -> (Key, NSEvent.ModifierFlags) {
+        switch option {
+        case .cmdShiftV:
+            return (.v, [.command, .shift])
+        case .cmdShiftSpace:
+            return (.space, [.command, .shift])
+        case .ctrlOptionV:
+            return (.v, [.control, .option])
         }
     }
 }

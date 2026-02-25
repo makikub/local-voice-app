@@ -7,9 +7,8 @@ struct VoiceInputApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // メニューバー常駐アプリのため、Windowシーンは定義しない
-        Settings {
-            EmptyView()
-        }
+        // メニューバー常駐アプリのため、メインウィンドウは持たない
+        // 設定画面は AppDelegate から NSWindow で直接表示する
+        Settings { EmptyView() }
     }
 }
