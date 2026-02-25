@@ -1,0 +1,39 @@
+name: VoiceInput
+options:
+  bundleIdPrefix: com.voiceinput
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+packages:
+  HotKey:
+    url: https://github.com/soffes/HotKey
+    from: "0.2.1"
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    from: "0.15.0"
+
+targets:
+  VoiceInput:
+    type: application
+    platform: macOS
+    sources:
+      - path: VoiceInput
+        excludes:
+          - "**/.DS_Store"
+        createIntermediateGroups: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.voiceinput.VoiceInput
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_ENTITLEMENTS: VoiceInput/VoiceInput.entitlements
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_LSUIElement: true
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "音声入力のためにマイクへのアクセスが必要です。"
+        SWIFT_STRICT_CONCURRENCY: minimal
+    dependencies:
+      - package: HotKey
+      - package: WhisperKit
