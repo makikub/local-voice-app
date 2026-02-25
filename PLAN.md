@@ -34,7 +34,10 @@ mac-stt-app/
 │   │   ├── VoiceInputApp.swift          # @main エントリポイント
 │   │   └── AppDelegate.swift            # メニューバー・録音・認識の統合
 │   ├── Views/
-│   │   └── MenuBarView.swift            # NSMenu 構築
+│   │   ├── MenuBarView.swift            # NSMenu 構築
+│   │   ├── RecordingIndicator.swift     # 録音中フローティング表示
+│   │   ├── SettingsView.swift           # 設定画面（SwiftUI）
+│   │   └── OnboardingView.swift         # 初回起動ガイド
 │   ├── Services/
 │   │   ├── AudioRecorder.swift          # AVAudioRecorder WAV録音
 │   │   ├── WhisperService.swift         # WhisperKit 音声認識
@@ -62,27 +65,25 @@ mac-stt-app/
   - 認識完了後に textInputService.insertText() でアクティブウィンドウにペースト
 - [x] ビルド確認
 
-## 残りの Phase
+## Phase 4: UI/UX（完了）
 
-### Phase 4: UI/UX
-- [ ] RecordingIndicator.swift 新規作成
-  - 録音中の小さなフローティングインジケーター（録音時間表示）
-  - NSPanel を使ったフローティングウィンドウ
-  - 常に最前面、クリックスルー可能
-- [ ] SettingsView.swift 新規作成（SwiftUI）
-  - ショートカットキーの変更
-  - Whisperモデルの選択（tiny / base / small / medium / large-v3-turbo）
-  - マイクデバイスの選択
-  - 「ログイン時に起動」オプション
-- [ ] OnboardingView.swift 新規作成
+- [x] RecordingIndicator.swift 新規作成
+  - NSPanel フローティングウィンドウで録音時間を表示
+  - 常に最前面、ドラッグ移動可能、全デスクトップに表示
+- [x] SettingsView.swift 新規作成（SwiftUI）
+  - Whisper モデルの選択（Tiny / Base / Small / Large V3 Turbo）
+  - ショートカットキーの変更（⌘⇧V / ⌘⇧Space / ⌃⌥V）
+  - 「ログイン時に起動」オプション（SMAppService）
+  - 認識後モデルアンロードオプション
+  - ※マイクデバイス選択は OS 側のサウンド設定に委譲
+- [x] OnboardingView.swift 新規作成
   - 初回起動時の権限案内（マイク、アクセシビリティ）
-  - ステップバイステップのガイド
-- [ ] エラーハンドリング強化
-  - エラー時に通知センターでユーザーに通知（UNUserNotificationCenter）
-  - モデルDL失敗時のリトライ機能
-- [ ] AppSettings を UserDefaults ラッパーに拡張
-- [ ] メモリ管理オプション（認識完了後にモデルをアンロードするオプション）
-- [ ] ビルド確認・動作テスト
+  - ステップバイステップのガイド、権限付与のポーリング検知
+- [x] エラーハンドリング強化
+  - UNUserNotificationCenter でエラー・認識失敗を通知
+- [x] AppSettings を UserDefaults ラッパーに拡張
+- [x] メモリ管理オプション（認識完了後にモデルをアンロード → 次回録音前に再ロード）
+- [x] ビルド確認・動作テスト
 
 ## 既知の注意点
 - App Sandbox: OFF（グローバルショートカット・CGEvent に必要）
