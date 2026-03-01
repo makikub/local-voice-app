@@ -7,6 +7,7 @@ struct OnboardingView: View {
 
     @State private var micGranted = false
     @State private var accessibilityGranted = false
+    @State private var claudeAvailable = false
     var onComplete: () -> Void
 
     var body: some View {
@@ -18,7 +19,7 @@ struct OnboardingView: View {
                     .foregroundStyle(.blue)
                 Text("VoiceInput へようこそ")
                     .font(.title2.bold())
-                Text("音声入力を使うために、2つの権限が必要です。")
+                Text("音声入力に必要な設定を確認します。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -48,6 +49,17 @@ struct OnboardingView: View {
                     isGranted: accessibilityGranted,
                     action: requestAccessibilityPermission
                 )
+
+                // Step 3: Claude CLI（オプション）
+                PermissionRow(
+                    step: 3,
+                    title: "Claude Code（オプション）",
+                    description: "認識結果のフィラー除去・句読点補完に使用します。\nなくても音声入力は利用できます。",
+                    iconName: "sparkles",
+                    isGranted: claudeAvailable,
+                    buttonLabel: "チェックする",
+                    action: checkClaudeAvailability
+                )
             }
             .padding(20)
 
@@ -66,7 +78,7 @@ struct OnboardingView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
-        .frame(width: 400, height: 420)
+        .frame(width: 400, height: 520)
         .onAppear {
             checkPermissions()
         }
@@ -79,6 +91,7 @@ struct OnboardingView: View {
     private func checkPermissions() {
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         accessibilityGranted = AXIsProcessTrusted()
+        claudeAvailable = TextPostProcessor.isClaudeAvailable()
     }
 
     private func requestMicPermission() {
@@ -101,6 +114,10 @@ struct OnboardingView: View {
             }
         }
     }
+
+    private func checkClaudeAvailability() {
+        claudeAvailable = TextPostProcessor.isClaudeAvailable()
+    }
 }
 
 // MARK: - 権限行
@@ -111,6 +128,7 @@ private struct PermissionRow: View {
     let description: String
     let iconName: String
     let isGranted: Bool
+    var buttonLabel: String = "許可する"
     let action: () -> Void
 
     var body: some View {
@@ -143,7 +161,7 @@ private struct PermissionRow: View {
                     .foregroundStyle(.secondary)
 
                 if !isGranted {
-                    Button("許可する") {
+                    Button(buttonLabel) {
                         action()
                     }
                     .controlSize(.small)
