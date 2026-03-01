@@ -16,9 +16,11 @@ xcodebuild -project VoiceInput.xcodeproj -scheme VoiceInput -configuration Debug
 open ~/Library/Developer/Xcode/DerivedData/VoiceInput-*/Build/Products/Debug/VoiceInput.app
 ```
 
-アクセシビリティ権限リセット（ビルド後に権限が無効になった場合）:
+実装完了後の確認（ビルド後に必ず実行すること）:
 ```bash
 tccutil reset Accessibility com.voiceinput.VoiceInput
+pkill -x VoiceInput
+open ~/Library/Developer/Xcode/DerivedData/VoiceInput-*/Build/Products/Debug/VoiceInput.app
 ```
 
 ## アーキテクチャ

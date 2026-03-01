@@ -15,6 +15,8 @@ enum AppSettings {
         static let launchAtLogin = "launchAtLogin"
         static let unloadModelAfterRecognition = "unloadModelAfterRecognition"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let enableClaudePostProcessing = "enableClaudePostProcessing"
+        static let deleteRecordingAfterTranscription = "deleteRecordingAfterTranscription"
     }
 
     // MARK: - 固定値（録音設定）
@@ -92,6 +94,24 @@ enum AppSettings {
     static var hasCompletedOnboarding: Bool {
         get { defaults.bool(forKey: Key.hasCompletedOnboarding) }
         set { defaults.set(newValue, forKey: Key.hasCompletedOnboarding) }
+    }
+
+    /// Claude で認識結果を整形する（フィラー除去・句読点補完）
+    static var enableClaudePostProcessing: Bool {
+        get { defaults.bool(forKey: Key.enableClaudePostProcessing) }
+        set { defaults.set(newValue, forKey: Key.enableClaudePostProcessing) }
+    }
+
+    /// 認識完了後に録音ファイルを自動削除する
+    static var deleteRecordingAfterTranscription: Bool {
+        get {
+            // デフォルト true（UserDefaults の bool は未登録時 false を返すため明示的に処理）
+            if defaults.object(forKey: Key.deleteRecordingAfterTranscription) == nil {
+                return true
+            }
+            return defaults.bool(forKey: Key.deleteRecordingAfterTranscription)
+        }
+        set { defaults.set(newValue, forKey: Key.deleteRecordingAfterTranscription) }
     }
 }
 

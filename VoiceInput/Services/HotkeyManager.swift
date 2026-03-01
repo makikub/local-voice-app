@@ -5,6 +5,7 @@ import HotKey
 /// AppSettings のショートカット設定に基づいてホットキーを登録する
 final class HotkeyManager {
     private var hotKey: HotKey?
+    private var escapeHotKey: HotKey?
     private let toggleHandler: () -> Void
 
     /// - Parameter toggleHandler: ショートカット押下時に呼ばれるコールバック
@@ -22,6 +23,17 @@ final class HotkeyManager {
         hotKey?.keyDownHandler = { [weak self] in
             self?.toggleHandler()
         }
+    }
+
+    /// 録音中のみ Esc キーを登録する
+    func registerEscape(handler: @escaping () -> Void) {
+        escapeHotKey = HotKey(key: .escape, modifiers: [])
+        escapeHotKey?.keyDownHandler = handler
+    }
+
+    /// Esc キーの登録を解除する
+    func unregisterEscape() {
+        escapeHotKey = nil
     }
 
     private func keyAndModifiers(for option: ShortcutOption) -> (Key, NSEvent.ModifierFlags) {

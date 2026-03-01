@@ -8,6 +8,7 @@ enum MenuBarView {
         let statusItem: NSMenuItem
         let modelStatusItem: NSMenuItem
         let shortcutItem: NSMenuItem
+        let cancelItem: NSMenuItem
     }
 
     /// メニューを生成する
@@ -35,6 +36,16 @@ enum MenuBarView {
         shortcutItem.isEnabled = false
         menu.addItem(shortcutItem)
 
+        // 録音キャンセル（録音中のみ有効）
+        let cancelItem = NSMenuItem(
+            title: "録音をキャンセル (Esc)",
+            action: #selector(AppDelegate.cancelRecording),
+            keyEquivalent: ""
+        )
+        cancelItem.target = target
+        cancelItem.isHidden = true
+        menu.addItem(cancelItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // 設定
@@ -61,7 +72,8 @@ enum MenuBarView {
             menu: menu,
             statusItem: statusItem,
             modelStatusItem: modelStatusItem,
-            shortcutItem: shortcutItem
+            shortcutItem: shortcutItem,
+            cancelItem: cancelItem
         )
     }
 }

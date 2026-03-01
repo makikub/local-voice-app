@@ -17,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var audioRecorder: AudioRecorder!
     private var whisperService: WhisperService!
     private var textInputService: TextInputService!
+    private var textPostProcessor: TextPostProcessor!
     private var recordingIndicator: RecordingIndicator!
     private var settingsWindowController: SettingsWindowController!
 
@@ -25,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var statusMenuItem: NSMenuItem?
     private weak var modelStatusMenuItem: NSMenuItem?
     private weak var shortcutMenuItem: NSMenuItem?
+    private weak var cancelMenuItem: NSMenuItem?
 
     // MARK: - ライフサイクル
 
@@ -34,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupAudioRecorder()
         setupHotkeyManager()
         setupTextInputService()
+        setupTextPostProcessor()
         setupRecordingIndicator()
         setupSettingsWindowController()
         setupWhisperService()
@@ -60,6 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusMenuItem = items.statusItem
         self.modelStatusMenuItem = items.modelStatusItem
         self.shortcutMenuItem = items.shortcutItem
+        self.cancelMenuItem = items.cancelItem
         self.statusItem.menu = items.menu
     }
 
@@ -79,6 +83,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !TextInputService.isAccessibilityGranted && AppSettings.hasCompletedOnboarding {
             TextInputService.requestAccessibility()
         }
+    }
+
+    private func setupTextPostProcessor() {
+        textPostProcessor = TextPostProcessor()
     }
 
     private func setupRecordingIndicator() {
@@ -107,10 +115,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func toggleRecording() {
         if audioRecorder.isRecording {
             // 録音停止 → 音声認識開始
+            hotkeyManager.unregisterEscape()
             let savedURL = audioRecorder.stopRecording()
             recordingIndicator.hide()
             updateStatusItemIcon(state: .idle)
             statusMenuItem?.title = "録音: オフ"
+            cancelMenuItem?.isHidden = true
 
             if let url = savedURL {
                 logger.info("録音停止: \(url.lastPathComponent)")
@@ -125,6 +135,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             recordingIndicator.show()
             updateStatusItemIcon(state: .recording)
             statusMenuItem?.title = "録音中..."
+            cancelMenuItem?.isHidden = false
+
+            // 録音中のみ Esc でキャンセル可能にする
+            hotkeyManager.registerEscape { [weak self] in
+                self?.cancelRecording()
+            }
+        }
+    }
+
+    /// 録音をキャンセルする（認識処理を実行しない）
+    @objc func cancelRecording() {
+        guard audioRecorder.isRecording else { return }
+
+        hotkeyManager.unregisterEscape()
+        let savedURL = audioRecorder.stopRecording()
+        recordingIndicator.hide()
+        updateStatusItemIcon(state: .idle)
+        statusMenuItem?.title = "録音: オフ"
+        cancelMenuItem?.isHidden = true
+        logger.info("録音をキャンセルしました")
+
+        // キャンセル時は常にファイルを削除
+        if let url = savedURL {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
@@ -143,13 +177,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             updateStatusItemIcon(state: .idle)
 
-            if let text = text {
+            if var text = text {
+                // Claude 後処理（オプション）
+                if AppSettings.enableClaudePostProcessing {
+                    statusMenuItem?.title = "整形中..."
+                    text = await textPostProcessor.process(text)
+                }
+
                 statusMenuItem?.title = "入力中..."
                 textInputService.insertText(text)
                 statusMenuItem?.title = "入力完了"
             } else {
                 statusMenuItem?.title = "認識結果なし"
                 sendNotification(title: "認識結果なし", body: "音声を認識できませんでした。もう一度お試しください。")
+            }
+
+            // WAV 自動削除（オプション）
+            if AppSettings.deleteRecordingAfterTranscription {
+                do {
+                    try FileManager.default.removeItem(at: audioURL)
+                    logger.info("録音ファイルを削除: \(audioURL.lastPathComponent)")
+                } catch {
+                    logger.warning("録音ファイルの削除に失敗: \(error.localizedDescription)")
+                }
             }
 
             try? await Task.sleep(nanoseconds: 3_000_000_000)
