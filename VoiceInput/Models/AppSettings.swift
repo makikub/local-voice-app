@@ -16,6 +16,7 @@ enum AppSettings {
         static let unloadModelAfterRecognition = "unloadModelAfterRecognition"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let enableClaudePostProcessing = "enableClaudePostProcessing"
+        static let openaiAPIKey = "openaiAPIKey"
         static let deleteRecordingAfterTranscription = "deleteRecordingAfterTranscription"
     }
 
@@ -96,10 +97,16 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Key.hasCompletedOnboarding) }
     }
 
-    /// Claude で認識結果を整形する（フィラー除去・句読点補完）
+    /// 認識結果を整形する（フィラー除去・句読点補完）
     static var enableClaudePostProcessing: Bool {
         get { defaults.bool(forKey: Key.enableClaudePostProcessing) }
         set { defaults.set(newValue, forKey: Key.enableClaudePostProcessing) }
+    }
+
+    /// OpenAI API キー
+    static var openaiAPIKey: String? {
+        get { defaults.string(forKey: Key.openaiAPIKey) }
+        set { defaults.set(newValue, forKey: Key.openaiAPIKey) }
     }
 
     /// 認識完了後に録音ファイルを自動削除する

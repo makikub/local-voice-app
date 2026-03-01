@@ -1,13 +1,13 @@
 import Foundation
 import os
 
-/// Claude CLI を使った認識テキストの後処理
-/// フィラー除去・句読点補完などをClaude Haiku で実行する
+/// OpenAI API を使った認識テキストの後処理
+/// フィラー除去・句読点補完などを gpt-4o-mini で実行する
 final class TextPostProcessor {
 
     private let logger = Logger(subsystem: "com.voiceinput.VoiceInput", category: "TextPostProcessor")
 
-    private static let prompt = """
+    private static let systemPrompt = """
         音声認識の結果を自然な日本語に整形してください。ルール：
         - 句点（。）と読点（、）を適切な位置に挿入
         - フィラー（えーと、あのー、まあ、えー、うーん等）を除去
@@ -16,148 +16,85 @@ final class TextPostProcessor {
         - 整形後のテキストのみを出力（説明や補足は不要）
         """
 
-    private static let timeoutSeconds: Double = 15
+    private static let apiURL = URL(string: "https://api.openai.com/v1/chat/completions")!
+    private static let model = "gpt-4.1-mini"
+    private static let timeoutSeconds: Double = 30
 
-    /// claude コマンドのフルパスキャッシュ
-    private static var resolvedClaudePath: String? = nil
-
-    /// /bin/zsh -l -c "which claude" でフルパスを解決してキャッシュする
-    @discardableResult
-    private static func resolveCLIPath() -> String? {
-        if let cached = resolvedClaudePath {
-            return cached
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-l", "-c", "which claude"]
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let path = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let path, !path.isEmpty else { return nil }
-            resolvedClaudePath = path
-            return path
-        } catch {
-            return nil
-        }
+    /// API キーが設定されているかチェック
+    static func isAvailable() -> Bool {
+        guard let key = AppSettings.openaiAPIKey else { return false }
+        return !key.isEmpty
     }
 
-    /// claude コマンドが利用可能かチェック
-    static func isClaudeAvailable() -> Bool {
-        return resolveCLIPath() != nil
-    }
-
-    /// 認識テキストを Claude で整形する
+    /// 認識テキストを整形する
     /// - Parameter text: Whisper の認識結果
     /// - Returns: 整形済みテキスト（失敗時は元テキストをそのまま返す）
     func process(_ text: String) async -> String {
         do {
-            return try await runClaude(input: text)
+            return try await callAPI(input: text)
         } catch {
-            logger.warning("Claude 後処理に失敗（元テキスト長: \(text.count)文字）: \(error.localizedDescription)")
+            logger.notice("後処理に失敗（元テキスト長: \(text.count)文字）: \(error.localizedDescription, privacy: .public)")
             return text
         }
     }
 
-    private func runClaude(input: String) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-
-            if let claudePath = Self.resolveCLIPath() {
-                logger.debug("claude フルパス: \(claudePath)")
-                process.executableURL = URL(fileURLWithPath: claudePath)
-                process.arguments = ["-p", "--model", "haiku", Self.prompt]
-            } else {
-                // フルパス取得失敗時はシェル経由にフォールバック
-                logger.debug("claude フルパス取得失敗。シェル経由で実行")
-                process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-                process.arguments = ["-l", "-c", "claude -p --model haiku '\(Self.prompt)'"]
-            }
-
-            let inputPipe = Pipe()
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            process.standardInput = inputPipe
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
-
-            do {
-                try process.run()
-                logger.debug("claude プロセス起動: PID=\(process.processIdentifier)")
-            } catch {
-                logger.error("claude プロセス起動失敗: \(error.localizedDescription)")
-                continuation.resume(throwing: error)
-                return
-            }
-
-            // 標準入力にテキストを書き込み、閉じる
-            let inputData = Data(input.utf8)
-            inputPipe.fileHandleForWriting.write(inputData)
-            inputPipe.fileHandleForWriting.closeFile()
-
-            // タイムアウト処理
-            let workItem = DispatchWorkItem {
-                if process.isRunning {
-                    self.logger.warning("claude タイムアウト（\(Self.timeoutSeconds)秒）。プロセスを終了")
-                    process.terminate()
-                }
-            }
-            DispatchQueue.global().asyncAfter(
-                deadline: .now() + Self.timeoutSeconds,
-                execute: workItem
-            )
-
-            process.terminationHandler = { _ in
-                workItem.cancel()
-
-                // デッドロック防止: stdout/stderr をバックグラウンドで非同期読み取り
-                let group = DispatchGroup()
-
-                var outputData = Data()
-                var errorData = Data()
-
-                group.enter()
-                DispatchQueue.global().async {
-                    outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                    group.leave()
-                }
-
-                group.enter()
-                DispatchQueue.global().async {
-                    errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                    group.leave()
-                }
-
-                group.wait()
-
-                let result = String(data: outputData, encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-                if process.terminationStatus == 0, !result.isEmpty {
-                    continuation.resume(returning: result)
-                } else {
-                    let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-                    continuation.resume(throwing: PostProcessError.claudeFailed(errorMessage))
-                }
-            }
+    private func callAPI(input: String) async throws -> String {
+        guard let apiKey = AppSettings.openaiAPIKey, !apiKey.isEmpty else {
+            throw PostProcessError.noAPIKey
         }
+
+        var request = URLRequest(url: Self.apiURL)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = Self.timeoutSeconds
+
+        let body: [String: Any] = [
+            "model": Self.model,
+            "messages": [
+                ["role": "system", "content": Self.systemPrompt],
+                ["role": "user", "content": input]
+            ],
+            "temperature": 0.3,
+            "max_tokens": 1024
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PostProcessError.apiFailed("Invalid response")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? ""
+            logger.notice("API エラー status=\(httpResponse.statusCode) body=[\(String(errorBody.prefix(200)), privacy: .public)]")
+            throw PostProcessError.apiFailed("HTTP \(httpResponse.statusCode)")
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let choices = json?["choices"] as? [[String: Any]]
+        let message = choices?.first?["message"] as? [String: Any]
+        let content = message?["content"] as? String
+
+        guard let result = content?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !result.isEmpty else {
+            throw PostProcessError.apiFailed("Empty response")
+        }
+
+        return result
     }
 
     enum PostProcessError: LocalizedError {
-        case claudeFailed(String)
+        case noAPIKey
+        case apiFailed(String)
 
         var errorDescription: String? {
             switch self {
-            case .claudeFailed(let message):
-                return "Claude 処理エラー: \(message)"
+            case .noAPIKey:
+                return "API キーが設定されていません"
+            case .apiFailed(let message):
+                return "API エラー: \(message)"
             }
         }
     }

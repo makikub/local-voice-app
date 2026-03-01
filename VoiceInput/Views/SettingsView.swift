@@ -8,7 +8,8 @@ struct SettingsView: View {
     @State private var selectedShortcut: ShortcutOption = AppSettings.shortcut
     @State private var launchAtLogin: Bool = AppSettings.launchAtLogin
     @State private var unloadModel: Bool = AppSettings.unloadModelAfterRecognition
-    @State private var enableClaude: Bool = AppSettings.enableClaudePostProcessing
+    @State private var enablePostProcessing: Bool = AppSettings.enableClaudePostProcessing
+    @State private var apiKey: String = AppSettings.openaiAPIKey ?? ""
     @State private var deleteRecording: Bool = AppSettings.deleteRecordingAfterTranscription
 
     /// モデル変更時のコールバック（AppDelegate がモデル再読み込みに使用）
@@ -44,21 +45,25 @@ struct SettingsView: View {
 
             // MARK: - テキスト整形
             Section {
-                let claudeAvailable = TextPostProcessor.isClaudeAvailable()
-                Toggle("Claude で整形", isOn: $enableClaude)
-                    .disabled(!claudeAvailable)
-                    .onChange(of: enableClaude) { _, newValue in
+                Toggle("認識結果を整形", isOn: $enablePostProcessing)
+                    .disabled(apiKey.isEmpty)
+                    .onChange(of: enablePostProcessing) { _, newValue in
                         AppSettings.enableClaudePostProcessing = newValue
                     }
 
-                if claudeAvailable {
-                    Text("認識後にフィラー除去・句読点補完を行います（Claude Haiku 使用）")
+                SecureField("OpenAI API キー", text: $apiKey)
+                    .onChange(of: apiKey) { _, newValue in
+                        AppSettings.openaiAPIKey = newValue.isEmpty ? nil : newValue
+                    }
+
+                if apiKey.isEmpty {
+                    Text("フィラー除去・句読点補完には OpenAI の API キーが必要です")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Claude Code がインストールされていません")
+                    Text("認識後にフィラー除去・句読点補完を行います（GPT-4.1 mini 使用）")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 Text("テキスト整形")

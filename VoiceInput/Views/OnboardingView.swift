@@ -7,7 +7,7 @@ struct OnboardingView: View {
 
     @State private var micGranted = false
     @State private var accessibilityGranted = false
-    @State private var claudeAvailable = false
+    @State private var apiKeyConfigured = false
     var onComplete: () -> Void
 
     var body: some View {
@@ -50,15 +50,15 @@ struct OnboardingView: View {
                     action: requestAccessibilityPermission
                 )
 
-                // Step 3: Claude CLI（オプション）
+                // Step 3: OpenAI API キー（オプション）
                 PermissionRow(
                     step: 3,
-                    title: "Claude Code（オプション）",
-                    description: "認識結果のフィラー除去・句読点補完に使用します。\nなくても音声入力は利用できます。",
+                    title: "OpenAI API キー（オプション）",
+                    description: "認識結果のフィラー除去・句読点補完に使用します。\n設定画面で API キーを入力してください。",
                     iconName: "sparkles",
-                    isGranted: claudeAvailable,
+                    isGranted: apiKeyConfigured,
                     buttonLabel: "チェックする",
-                    action: checkClaudeAvailability
+                    action: checkAPIKeyAvailability
                 )
             }
             .padding(20)
@@ -91,7 +91,7 @@ struct OnboardingView: View {
     private func checkPermissions() {
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         accessibilityGranted = AXIsProcessTrusted()
-        claudeAvailable = TextPostProcessor.isClaudeAvailable()
+        apiKeyConfigured = TextPostProcessor.isAvailable()
     }
 
     private func requestMicPermission() {
@@ -115,8 +115,8 @@ struct OnboardingView: View {
         }
     }
 
-    private func checkClaudeAvailability() {
-        claudeAvailable = TextPostProcessor.isClaudeAvailable()
+    private func checkAPIKeyAvailability() {
+        apiKeyConfigured = TextPostProcessor.isAvailable()
     }
 }
 
