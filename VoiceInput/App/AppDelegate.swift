@@ -187,7 +187,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Claude 後処理（オプション）
                 if AppSettings.enableClaudePostProcessing {
                     statusMenuItem?.title = "整形中..."
+                    let originalText = text
                     text = await textPostProcessor.process(text)
+                    if text == originalText {
+                        logger.warning("Claude 後処理: テキストに変化なし（後処理が効いていない可能性）")
+                    }
                 }
 
                 statusMenuItem?.title = "入力中..."

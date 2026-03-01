@@ -95,7 +95,7 @@ final class WhisperService {
                 usePrefillPrompt: true,
                 usePrefillCache: true,
                 skipSpecialTokens: true,
-                withoutTimestamps: true
+                withoutTimestamps: false
             )
 
             let results = try await whisperKit.transcribe(
