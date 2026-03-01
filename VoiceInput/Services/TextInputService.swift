@@ -45,10 +45,28 @@ final class TextInputService {
         // 3. Cmd+V をシミュレートしてペースト
         let pasted = simulatePaste()
 
-        // 4. 少し待ってから元のクリップボード内容を復元
-        // ペーストイベントがアプリに処理される時間を確保
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.restorePasteboard(pasteboard, contents: previousContents)
+        // 4. ペースト先アプリがクリップボードを読み取る時間を確保してから復元
+        // 200ms ではElectron系アプリやIDEで不足するケースがあるため、
+        // changeCount を監視して読み取り完了を待つ（最大1秒）
+        let changeCountAfterSet = pasteboard.changeCount
+        DispatchQueue.global(qos: .userInitiated).async {
+            let maxWait = 1.0
+            let interval = 0.05
+            var elapsed = 0.0
+
+            // ペースト先がクリップボードを読むと changeCount が変わる場合がある
+            // 変わらなくても最低 500ms は待つ（安全マージン）
+            while elapsed < maxWait {
+                Thread.sleep(forTimeInterval: interval)
+                elapsed += interval
+                if elapsed >= 0.5 && pasteboard.changeCount != changeCountAfterSet {
+                    break
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.restorePasteboard(pasteboard, contents: previousContents)
+            }
         }
 
         if pasted {

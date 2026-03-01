@@ -13,7 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - サービス
 
     private var statusItem: NSStatusItem!
-    private var hotkeyManager: HotkeyManager!
+    private var hotkeyManager: HotkeyManager?
     private var audioRecorder: AudioRecorder!
     private var whisperService: WhisperService!
     private var textInputService: TextInputService!
@@ -34,15 +34,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupNotifications()
         setupStatusItem()
         setupAudioRecorder()
-        setupHotkeyManager()
+
+        let isOnboarded = AppSettings.hasCompletedOnboarding
+
+        if isOnboarded {
+            setupHotkeyManager()
+        }
+
         setupTextInputService()
         setupTextPostProcessor()
         setupRecordingIndicator()
         setupSettingsWindowController()
         setupWhisperService()
 
-        // 初回起動時はオンボーディングを表示
-        if !AppSettings.hasCompletedOnboarding {
+        if !isOnboarded {
             showOnboarding()
         }
     }
@@ -115,7 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func toggleRecording() {
         if audioRecorder.isRecording {
             // 録音停止 → 音声認識開始
-            hotkeyManager.unregisterEscape()
+            hotkeyManager?.unregisterEscape()
             let savedURL = audioRecorder.stopRecording()
             recordingIndicator.hide()
             updateStatusItemIcon(state: .idle)
@@ -129,6 +134,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             guard case .ready = whisperService.state else {
                 logger.warning("モデル未準備のため録音を開始できません")
+                notifyModelNotReady()
                 return
             }
             audioRecorder.startRecording()
@@ -138,7 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             cancelMenuItem?.isHidden = false
 
             // 録音中のみ Esc でキャンセル可能にする
-            hotkeyManager.registerEscape { [weak self] in
+            hotkeyManager?.registerEscape { [weak self] in
                 self?.cancelRecording()
             }
         }
@@ -148,7 +154,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func cancelRecording() {
         guard audioRecorder.isRecording else { return }
 
-        hotkeyManager.unregisterEscape()
+        hotkeyManager?.unregisterEscape()
         let savedURL = audioRecorder.stopRecording()
         recordingIndicator.hide()
         updateStatusItemIcon(state: .idle)
@@ -266,6 +272,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - モデル未準備時のフィードバック
+
+    private func notifyModelNotReady() {
+        switch whisperService.state {
+        case .downloadingModel(let progress):
+            let percent = Int(progress * 100)
+            sendNotification(title: "モデル準備中", body: "モデルをダウンロード中です（\(percent)%）。完了までお待ちください。")
+        case .loadingModel:
+            sendNotification(title: "モデル準備中", body: "モデルを読み込み中です。まもなく使用可能になります。")
+        case .error(let message):
+            sendNotification(title: "モデルエラー", body: "モデルの読み込みに失敗しました: \(message)\n設定からモデルを変更するか、アプリを再起動してください。")
+        case .idle:
+            sendNotification(title: "モデル未ロード", body: "モデルのロードを開始します。しばらくお待ちください。")
+            Task { await whisperService.setupModel() }
+        case .transcribing:
+            sendNotification(title: "認識処理中", body: "前の音声を認識中です。完了後に再度お試しください。")
+        case .ready:
+            break
+        }
+    }
+
     // MARK: - 通知
 
     private func sendNotification(title: String, body: String) {
@@ -290,6 +317,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let onboardingView = OnboardingView { [weak self] in
             self?.onboardingWindow?.close()
             self?.onboardingWindow = nil
+            // オンボーディング完了後にホットキーを初期化
+            self?.setupHotkeyManager()
         }
 
         let hostingController = NSHostingController(rootView: onboardingView)
@@ -317,7 +346,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             },
             onShortcutChanged: { [weak self] newShortcut in
-                self?.hotkeyManager.applyShortcut(newShortcut)
+                self?.hotkeyManager?.applyShortcut(newShortcut)
                 self?.shortcutMenuItem?.title = "録音開始/停止: \(newShortcut.displayName)"
             }
         )
