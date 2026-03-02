@@ -11,11 +11,14 @@ struct SettingsView: View {
     @State private var enablePostProcessing: Bool = AppSettings.enableClaudePostProcessing
     @State private var apiKey: String = AppSettings.openaiAPIKey ?? ""
     @State private var deleteRecording: Bool = AppSettings.deleteRecordingAfterTranscription
+    @State private var recordingMode: RecordingMode = AppSettings.recordingMode
 
     /// モデル変更時のコールバック（AppDelegate がモデル再読み込みに使用）
     var onModelChanged: ((String) -> Void)?
     /// ショートカット変更時のコールバック
     var onShortcutChanged: ((ShortcutOption) -> Void)?
+    /// 録音モード変更時のコールバック
+    var onRecordingModeChanged: ((RecordingMode) -> Void)?
 
     var body: some View {
         Form {
@@ -80,6 +83,22 @@ struct SettingsView: View {
                     AppSettings.shortcut = newValue
                     onShortcutChanged?(newValue)
                 }
+
+                Picker("録音モード", selection: $recordingMode) {
+                    ForEach(RecordingMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .onChange(of: recordingMode) { _, newValue in
+                    AppSettings.recordingMode = newValue
+                    onRecordingModeChanged?(newValue)
+                }
+
+                Text(recordingMode == .toggle
+                    ? "ショートカットを押すたびに録音開始/停止を切り替えます。"
+                    : "ショートカットを押している間だけ録音します。離すと転写が開始されます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } header: {
                 Text("操作")
             }
@@ -107,7 +126,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 500)
+        .frame(width: 420, height: 560)
     }
 }
 
@@ -121,7 +140,8 @@ final class SettingsWindowController {
 
     /// 設定ウィンドウを表示する
     func showSettings(onModelChanged: @escaping (String) -> Void,
-                      onShortcutChanged: @escaping (ShortcutOption) -> Void) {
+                      onShortcutChanged: @escaping (ShortcutOption) -> Void,
+                      onRecordingModeChanged: @escaping (RecordingMode) -> Void) {
         if let window = window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -130,7 +150,8 @@ final class SettingsWindowController {
 
         let settingsView = SettingsView(
             onModelChanged: onModelChanged,
-            onShortcutChanged: onShortcutChanged
+            onShortcutChanged: onShortcutChanged,
+            onRecordingModeChanged: onRecordingModeChanged
         )
         let hostingController = NSHostingController(rootView: settingsView)
 

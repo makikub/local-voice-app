@@ -18,6 +18,7 @@ enum AppSettings {
         static let enableClaudePostProcessing = "enableClaudePostProcessing"
         static let openaiAPIKey = "openaiAPIKey"
         static let deleteRecordingAfterTranscription = "deleteRecordingAfterTranscription"
+        static let recordingMode = "recordingMode"
     }
 
     // MARK: - 固定値（録音設定）
@@ -120,6 +121,18 @@ enum AppSettings {
         }
         set { defaults.set(newValue, forKey: Key.deleteRecordingAfterTranscription) }
     }
+
+    /// 録音モード（トグル or Push-to-Talk）
+    static var recordingMode: RecordingMode {
+        get {
+            guard let raw = defaults.string(forKey: Key.recordingMode),
+                  let mode = RecordingMode(rawValue: raw) else {
+                return .toggle
+            }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.recordingMode) }
+    }
 }
 
 // MARK: - ショートカットオプション
@@ -134,6 +147,20 @@ enum ShortcutOption: String, CaseIterable {
         case .cmdShiftV:     return "⌘⇧V"
         case .cmdShiftSpace: return "⌘⇧Space"
         case .ctrlOptionV:   return "⌃⌥V"
+        }
+    }
+}
+
+// MARK: - 録音モード
+
+enum RecordingMode: String, CaseIterable {
+    case toggle = "toggle"
+    case pushToTalk = "pushToTalk"
+
+    var displayName: String {
+        switch self {
+        case .toggle:     return "トグル（押して開始／もう一度押して停止）"
+        case .pushToTalk: return "Push-to-Talk（押している間だけ録音）"
         }
     }
 }

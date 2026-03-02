@@ -77,9 +77,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupHotkeyManager() {
-        hotkeyManager = HotkeyManager { [weak self] in
-            self?.toggleRecording()
+        switch AppSettings.recordingMode {
+        case .toggle:
+            hotkeyManager = HotkeyManager(
+                keyDownHandler: { [weak self] in self?.toggleRecording() }
+            )
+        case .pushToTalk:
+            hotkeyManager = HotkeyManager(
+                keyDownHandler: { [weak self] in self?.startPTTRecording() },
+                keyUpHandler: { [weak self] in self?.stopPTTRecording() }
+            )
         }
+        updateShortcutMenuItem()
     }
 
     private func setupTextInputService() {
@@ -168,6 +177,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Push-to-Talk
+
+    /// PTT: ホットキー押下時に録音開始
+    private func startPTTRecording() {
+        guard !audioRecorder.isRecording else { return }
+
+        guard case .ready = whisperService.state else {
+            notifyModelNotReady()
+            return
+        }
+        audioRecorder.startRecording()
+        recordingIndicator.show()
+        updateStatusItemIcon(state: .recording)
+        statusMenuItem?.title = "録音中..."
+        cancelMenuItem?.isHidden = false
+
+        hotkeyManager?.registerEscape { [weak self] in
+            self?.cancelRecording()
+        }
+    }
+
+    /// PTT: ホットキー離上時に録音停止→転写開始
+    private func stopPTTRecording() {
+        guard audioRecorder.isRecording else { return }
+
+        hotkeyManager?.unregisterEscape()
+        let savedURL = audioRecorder.stopRecording()
+        recordingIndicator.hide()
+        updateStatusItemIcon(state: .idle)
+        statusMenuItem?.title = "録音: オフ"
+        cancelMenuItem?.isHidden = true
+
+        if let url = savedURL {
+            logger.info("PTT録音停止: \(url.lastPathComponent)")
+            startTranscription(audioURL: url)
+        }
+    }
+
     /// 音声認識を非同期で実行
     private func startTranscription(audioURL: URL) {
         updateStatusItemIcon(state: .transcribing)
@@ -253,6 +300,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .idle:
             button.image?.isTemplate = true
             button.contentTintColor = nil
+        }
+    }
+
+    private func updateShortcutMenuItem() {
+        let shortcut = AppSettings.shortcut.displayName
+        switch AppSettings.recordingMode {
+        case .toggle:
+            shortcutMenuItem?.title = "録音開始/停止: \(shortcut)"
+        case .pushToTalk:
+            shortcutMenuItem?.title = "Push-to-Talk: \(shortcut)"
         }
     }
 
@@ -351,7 +408,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onShortcutChanged: { [weak self] newShortcut in
                 self?.hotkeyManager?.applyShortcut(newShortcut)
-                self?.shortcutMenuItem?.title = "録音開始/停止: \(newShortcut.displayName)"
+                self?.updateShortcutMenuItem()
+            },
+            onRecordingModeChanged: { [weak self] _ in
+                self?.setupHotkeyManager()
             }
         )
     }
