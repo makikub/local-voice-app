@@ -70,6 +70,30 @@ final class WhisperService {
         }
     }
 
+    // MARK: - カスタム辞書
+
+    /// カスタム辞書から promptTokens を生成する
+    /// 辞書が空または tokenizer が利用不可の場合は nil を返す
+    private func buildPromptTokens() -> [Int]? {
+        let entries = AppSettings.customDictionary
+        guard !entries.isEmpty else { return nil }
+
+        guard let tokenizer = whisperKit?.tokenizer else {
+            logger.warning("tokenizer が利用できないためカスタム辞書をスキップ")
+            return nil
+        }
+
+        // 読み(表示) 形式でプロンプトを構築し、音→表記の対応をヒントとして与える
+        let terms = entries.map { "\($0.reading)(\($0.display))" }
+        let promptText = "Glossary: " + terms.joined(separator: ", ")
+        let tokens = tokenizer.encode(text: promptText)
+            .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
+
+        logger.info("カスタム辞書: \(entries.count)語 → \(tokens.count)トークン")
+
+        return tokens.isEmpty ? nil : tokens
+    }
+
     // MARK: - 音声認識
 
     /// WAV ファイルを音声認識し、テキストを返す
@@ -95,7 +119,8 @@ final class WhisperService {
                 usePrefillPrompt: true,
                 usePrefillCache: true,
                 skipSpecialTokens: true,
-                withoutTimestamps: true
+                withoutTimestamps: true,
+                promptTokens: buildPromptTokens()
             )
 
             let results = try await whisperKit.transcribe(

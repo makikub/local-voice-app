@@ -19,7 +19,13 @@ enum AppSettings {
         static let openaiAPIKey = "openaiAPIKey"
         static let deleteRecordingAfterTranscription = "deleteRecordingAfterTranscription"
         static let recordingMode = "recordingMode"
+        static let customDictionary = "customDictionary"
     }
+
+    // MARK: - 固定値（カスタム辞書）
+
+    /// カスタム辞書の最大登録数（promptTokens の 224 トークン上限を考慮）
+    static let maxDictionaryWords = 50
 
     // MARK: - 固定値（録音設定）
 
@@ -122,6 +128,22 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: Key.deleteRecordingAfterTranscription) }
     }
 
+    /// カスタム辞書（音声認識のヒント語彙）
+    static var customDictionary: [DictionaryEntry] {
+        get {
+            guard let data = defaults.data(forKey: Key.customDictionary),
+                  let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data) else {
+                return []
+            }
+            return entries
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Key.customDictionary)
+            }
+        }
+    }
+
     /// 録音モード（トグル or Push-to-Talk）
     static var recordingMode: RecordingMode {
         get {
@@ -149,6 +171,16 @@ enum ShortcutOption: String, CaseIterable {
         case .ctrlOptionV:   return "⌃⌥V"
         }
     }
+}
+
+// MARK: - カスタム辞書エントリ
+
+struct DictionaryEntry: Codable, Equatable, Hashable, Identifiable {
+    var id: String { reading + display }
+    /// 読み（音声認識のヒント。ひらがな・カタカナ・英語など）
+    var reading: String
+    /// 表示文字（認識結果として出力したい表記）
+    var display: String
 }
 
 // MARK: - 録音モード

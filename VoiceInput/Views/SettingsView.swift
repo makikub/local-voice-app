@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var apiKey: String = AppSettings.openaiAPIKey ?? ""
     @State private var deleteRecording: Bool = AppSettings.deleteRecordingAfterTranscription
     @State private var recordingMode: RecordingMode = AppSettings.recordingMode
+    @State private var dictionaryEntries: [DictionaryEntry] = AppSettings.customDictionary
+    @State private var newReading: String = ""
+    @State private var newDisplay: String = ""
 
     /// モデル変更時のコールバック（AppDelegate がモデル再読み込みに使用）
     var onModelChanged: ((String) -> Void)?
@@ -44,6 +47,44 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             } header: {
                 Text("音声認識")
+            }
+
+            // MARK: - カスタム辞書
+            Section {
+                ForEach(dictionaryEntries) { entry in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.display)
+                            Text(entry.reading)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeEntry(entry)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+
+                HStack {
+                    TextField("読み", text: $newReading)
+                        .frame(maxWidth: 120)
+                    TextField("表示", text: $newDisplay)
+                        .onSubmit { addEntry() }
+                    Button("追加") { addEntry() }
+                        .disabled(newReading.trimmingCharacters(in: .whitespaces).isEmpty
+                            || newDisplay.trimmingCharacters(in: .whitespaces).isEmpty
+                            || dictionaryEntries.count >= AppSettings.maxDictionaryWords)
+                }
+
+                Text("\(dictionaryEntries.count) / \(AppSettings.maxDictionaryWords) 語　読みと表示文字を登録すると認識精度が向上します。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("カスタム辞書")
             }
 
             // MARK: - テキスト整形
@@ -126,7 +167,25 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 560)
+        .frame(width: 420, height: 640)
+    }
+
+    private func addEntry() {
+        let reading = newReading.trimmingCharacters(in: .whitespaces)
+        let display = newDisplay.trimmingCharacters(in: .whitespaces)
+        guard !reading.isEmpty, !display.isEmpty,
+              dictionaryEntries.count < AppSettings.maxDictionaryWords else { return }
+        let entry = DictionaryEntry(reading: reading, display: display)
+        guard !dictionaryEntries.contains(entry) else { return }
+        dictionaryEntries.append(entry)
+        AppSettings.customDictionary = dictionaryEntries
+        newReading = ""
+        newDisplay = ""
+    }
+
+    private func removeEntry(_ entry: DictionaryEntry) {
+        dictionaryEntries.removeAll { $0 == entry }
+        AppSettings.customDictionary = dictionaryEntries
     }
 }
 
